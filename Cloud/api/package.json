@@ -1,0 +1,25 @@
+{
+  "name": "valkyreye-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "API REST de radares e ocorrências do ValkyrEye",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "studio": "prisma studio --port 5555 --browser none",
+    "db:pull": "prisma db pull"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "dotenv": "16.6.1",
+    "prisma": "7.10.1"
+  }
+}
