@@ -55,7 +55,9 @@ Cloud/
     └── src/
         ├── App.js       página, atualização periódica e estado
         ├── api.js       chamadas à API
-        └── components/RadarMap.js  mapa em SVG
+        └── components/
+            ├── RadarMap.js    mapa em SVG
+            └── usePanZoom.js  arrastar e zoom
 ```
 
 ## Modelo de dados
@@ -188,8 +190,18 @@ API precisa permitir CORS, o que ainda não está configurado.
 O mapa coloca o servidor central no centro, com o norte para cima, e desenha
 cada radar a partir de `distancia` e `direcao`:
 `x = distancia · sen(direcao)` (leste) e `y = distancia · cos(direcao)` (norte).
-A escala se ajusta ao radar mais distante, e os anéis tracejados marcam
-distâncias em metros. A lista é consultada a cada 10 segundos.
+Ao carregar, a escala se ajusta para que o radar mais distante fique perto da
+borda. Os anéis tracejados marcam distâncias, com o passo ajustado ao zoom.
+A lista é consultada a cada 10 segundos.
+
+| Ação | Mouse | Toque | Teclado (mapa focado) |
+| --- | --- | --- | --- |
+| Mover | arrastar | arrastar com um dedo | setas |
+| Zoom | roda, duplo clique (Shift + duplo clique afasta) | pinça | `+` e `-` |
+| Ajustar aos radares | botão no canto inferior direito | botão | — |
+
+Depois que o mapa é movido, a atualização periódica não altera mais a
+visualização; o botão de ajuste volta ao enquadramento automático.
 
 ### Acessar o banco com psql
 

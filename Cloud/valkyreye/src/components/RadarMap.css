@@ -11,18 +11,18 @@
   height: 100%;
 }
 
-.map-rings line,
-.map-rings circle {
+.map-grid line,
+.map-grid circle {
   fill: none;
   stroke: var(--map-grid);
   stroke-width: 1.5;
 }
 
-.map-rings circle {
+.map-grid circle {
   stroke-dasharray: 6 6;
 }
 
-.map-rings text {
+.map-grid text {
   fill: var(--map-grid-text);
   font-size: 14px;
 }
@@ -82,10 +82,81 @@
 
 .map-radar text {
   fill: var(--text);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   paint-order: stroke;
   stroke: var(--map-bg);
   stroke-width: 4px;
+  stroke-linejoin: round;
+}
+
+.radar-map {
+  overflow: hidden;
+}
+
+.radar-map-svg {
+  outline: none;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.radar-map-svg.is-dragging {
+  cursor: grabbing;
+}
+
+.radar-map-svg:focus-visible {
+  outline: 3px solid var(--radar-ring);
+  outline-offset: -3px;
+}
+
+.map-controls {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(31, 33, 36, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+.map-controls button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.map-controls button + button {
+  border-top: 1px solid var(--border);
+}
+
+.map-controls button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.map-controls button:focus-visible {
+  outline: 2px solid var(--radar-ring);
+  outline-offset: -2px;
+}
+
+.map-controls svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
   stroke-linejoin: round;
 }
