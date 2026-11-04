@@ -160,3 +160,150 @@
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Seleção e reposicionamento */
+
+.map-radar {
+  cursor: pointer;
+  outline: none;
+}
+
+.map-radar:focus-visible .map-radar-dot,
+.map-radar.is-selected .map-radar-dot {
+  stroke: var(--text);
+  stroke-width: 5;
+}
+
+.map-radar.is-editing {
+  cursor: move;
+}
+
+.map-radar-pulse {
+  fill: none;
+  stroke: var(--radar);
+  stroke-width: 3;
+  stroke-dasharray: 4 5;
+  animation: radar-pulse-spin 6s linear infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes radar-pulse-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-radar-pulse {
+    animation: none;
+  }
+}
+
+.radar-map-svg.is-repositioning {
+  cursor: crosshair;
+}
+
+.map-trail line {
+  stroke: var(--radar-ring);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+.map-trail circle {
+  fill: none;
+  stroke: var(--radar-ring);
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+
+/* Janela do radar */
+
+.radar-popover {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--header-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 0.875rem;
+}
+
+.radar-popover-arrow {
+  position: absolute;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--header-bg);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+
+.radar-popover.is-below .radar-popover-arrow {
+  top: -7px;
+  bottom: auto;
+  transform: rotate(225deg);
+}
+
+.radar-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.radar-popover-header h2 {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.radar-popover-hint {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.radar-popover-fields {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 0 0 12px;
+}
+
+.radar-popover-fields dt {
+  color: var(--text-muted);
+}
+
+.radar-popover-fields dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.radar-popover-fields .was {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.radar-popover-error {
+  margin: 0 0 10px;
+  color: var(--error);
+}
+
+.radar-popover-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.radar-popover-actions .btn {
+  flex: 1;
+  padding: 0 10px;
+}

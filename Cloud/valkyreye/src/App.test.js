@@ -1,18 +1,42 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
-import { toMapPoint } from "./components/RadarMap";
+import { fromMapPoint, toMapPoint } from "./components/RadarMap";
 
 const radares = [
   { id: "radar-01", distancia: 100, direcao: 0 },
   { id: "radar-02", distancia: 50, direcao: 90 },
 ];
 
+const jsonResponse = (body, status = 200) => ({
+  ok: status < 400,
+  status,
+  json: () => Promise.resolve(body),
+});
+
 beforeEach(() => {
-  global.fetch = jest.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(radares),
+  global.fetch = jest.fn((url, options = {}) => {
+    if (options.method === "PATCH") {
+      const id = decodeURIComponent(url.split("/").pop());
+      return Promise.resolve(jsonResponse({ id, ...JSON.parse(options.body) }));
+    }
+    return Promise.resolve(jsonResponse(radares));
   });
 });
+
+const patchCalls = () =>
+  global.fetch.mock.calls
+    .filter(([, options]) => options?.method === "PATCH")
+    .map(([url, options]) => [url, JSON.parse(options.body)]);
+
+/** Toque sem arrasto. No jsdom o SVG fica em (0, 0) e mede 800x600. */
+function tap(element, x, y) {
+  const map = screen.getByRole("application");
+  fireEvent.pointerDown(element, { pointerId: 7, button: 0, clientX: x, clientY: y });
+  fireEvent.pointerUp(map, { pointerId: 7, clientX: x, clientY: y });
+}
+
+// Com o ajuste inicial, 100 m ocupam 600 × 0,46 = 276 px; a central fica em (400, 300).
+const PX_PER_M = 2.76;
 
 test("mostra a central e um ponto por radar", async () => {
   render(<App />);
@@ -23,11 +47,7 @@ test("mostra a central e um ponto por radar", async () => {
 });
 
 test("mostra erro da API", async () => {
-  global.fetch.mockResolvedValue({
-    ok: false,
-    status: 500,
-    json: () => Promise.resolve({ erro: "Erro interno" }),
-  });
+  global.fetch.mockResolvedValue(jsonResponse({ erro: "Erro interno" }, 500));
   render(<App />);
   expect(await screen.findByRole("alert")).toHaveTextContent("Erro interno");
 });
@@ -72,4 +92,86 @@ test("arrastar desloca o mapa", async () => {
   const [x1, y1] = position();
   expect(x1 - x0).toBeCloseTo(60);
   expect(y1 - y0).toBeCloseTo(30);
+});
+
+test.each([
+  [0, -10, 10, 0],
+  [10, 0, 10, 90],
+  [0, 10, 10, 180],
+  [-10, 0, 10, 270],
+  [-0.001, -10, 10, 0], // 359,99° arredonda para 0°, nunca 360°
+])("ponto (%d, %d) vira %d m a %d°", (dx, dy, distancia, direcao) => {
+  expect(fromMapPoint(dx, dy, 1)).toEqual({ distancia, direcao });
+});
+
+test("reposiciona um radar, grava na API e desfaz", async () => {
+  render(<App />);
+  const label = await screen.findByText("radar-01");
+
+  // Clicar no radar abre a janela com os campos.
+  tap(label, 400, 24);
+  const dialog = screen.getByRole("dialog", { name: "Radar radar-01" });
+  expect(within(dialog).getByText("100 m")).toBeInTheDocument();
+  expect(within(dialog).getByText("0°")).toBeInTheDocument();
+
+  // Reposicionar e tocar 50 m a leste da central.
+  fireEvent.click(within(dialog).getByRole("button", { name: "Reposicionar" }));
+  tap(screen.getByRole("application"), 400 + 50 * PX_PER_M, 300);
+  expect(within(dialog).getByText("50 m")).toBeInTheDocument();
+  expect(within(dialog).getByText("90°")).toBeInTheDocument();
+  expect(patchCalls()).toHaveLength(0);
+
+  fireEvent.click(within(dialog).getByRole("button", { name: "Fixar posição" }));
+  expect(await screen.findByText("radar-01 reposicionado.")).toBeInTheDocument();
+  expect(patchCalls()).toEqual([["/radares/radar-01", { distancia: 50, direcao: 90 }]]);
+  expect(screen.getByRole("button", { name: "Reposicionar" })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Desfazer reposicionamento" }));
+  expect(await screen.findByText("Reposicionamento de radar-01 desfeito.")).toBeInTheDocument();
+  expect(patchCalls()[1]).toEqual(["/radares/radar-01", { distancia: 100, direcao: 0 }]);
+  const restored = screen.getByRole("dialog", { name: "Radar radar-01" });
+  expect(within(restored).getByText("100 m")).toBeInTheDocument();
+});
+
+test("arrastar o radar em edição move o radar, não o mapa", async () => {
+  render(<App />);
+  const label = await screen.findByText("radar-01");
+  tap(label, 400, 24);
+  fireEvent.click(screen.getByRole("button", { name: "Reposicionar" }));
+
+  const radar = label.closest("[data-radar-id]");
+  const house = document.querySelector(".map-house").parentNode.getAttribute("transform");
+  fireEvent.pointerDown(radar, { pointerId: 3, button: 0, clientX: 400, clientY: 24 });
+  // 25 m = 69 px: inteiro, porque o MouseEvent do jsdom trunca clientX/clientY.
+  fireEvent.pointerMove(radar, { pointerId: 3, clientX: 400, clientY: 300 - 25 * PX_PER_M });
+  fireEvent.pointerUp(radar, { pointerId: 3 });
+
+  expect(document.querySelector(".map-house").parentNode.getAttribute("transform")).toBe(house);
+  const dialog = screen.getByRole("dialog", { name: "Radar radar-01" });
+  expect(within(dialog).getByText("25 m")).toBeInTheDocument();
+});
+
+test("falha ao gravar mantém a edição e mostra o erro; Esc cancela", async () => {
+  render(<App />);
+  const label = await screen.findByText("radar-01");
+  global.fetch.mockImplementation((url, options = {}) =>
+    Promise.resolve(
+      options.method === "PATCH"
+        ? jsonResponse({ erro: "Valor rejeitado pelo banco de dados" }, 400)
+        : jsonResponse(radares)
+    )
+  );
+  tap(label, 400, 24);
+  fireEvent.click(screen.getByRole("button", { name: "Reposicionar" }));
+  tap(screen.getByRole("application"), 400 + 50 * PX_PER_M, 300);
+  fireEvent.click(screen.getByRole("button", { name: "Fixar posição" }));
+
+  expect(await screen.findByText(/Valor rejeitado/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Fixar posição" })).toBeEnabled();
+  expect(screen.queryByText(/reposicionado\./)).not.toBeInTheDocument();
+
+  fireEvent.keyDown(document, { key: "Escape" });
+  const dialog = screen.getByRole("dialog", { name: "Radar radar-01" });
+  await waitFor(() => expect(within(dialog).getByText("100 m")).toBeInTheDocument());
+  expect(within(dialog).getByRole("button", { name: "Reposicionar" })).toBeInTheDocument();
 });

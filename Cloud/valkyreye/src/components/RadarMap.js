@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { formatDirection, formatDistance } from "./format";
+import RadarPopover from "./RadarPopover";
 import "./RadarMap.css";
 import { MAX_ZOOM, MIN_ZOOM, usePanZoom } from "./usePanZoom";
 
@@ -33,11 +35,18 @@ export function toMapPoint(distancia, direcao, scale) {
   };
 }
 
-function formatDistance(meters) {
-  if (meters >= 1000) {
-    return `${Number((meters / 1000).toFixed(2)).toLocaleString("pt-BR")} km`;
-  }
-  return `${Number(meters.toFixed(1)).toLocaleString("pt-BR")} m`;
+/**
+ * Inverso de toMapPoint: deslocamento em pixels a partir da central para
+ * distância (m, 0,1 m de resolução) e direção (graus a partir do norte,
+ * sentido horário, 0,1° de resolução, no intervalo [0, 360)).
+ */
+export function fromMapPoint(dx, dy, scale) {
+  const east = dx / scale;
+  const north = -dy / scale;
+  const distancia = Math.max(0.1, Math.round(Math.hypot(east, north) * 10) / 10);
+  let direcao = Math.round((((Math.atan2(east, north) * 180) / Math.PI + 360) % 360) * 10) / 10;
+  if (direcao >= 360) direcao = 0;
+  return { distancia, direcao };
 }
 
 function useElementSize(ref) {
@@ -125,16 +134,50 @@ function Grid({ size, origin, k }) {
   );
 }
 
-function RadarPoint({ radar, origin, k }) {
+function RadarPoint({ radar, origin, k, selected, editing, onSelect, dragHandlers }) {
   const { x, y } = toMapPoint(radar.distancia, radar.direcao, k);
+  const className = ["map-radar", selected && "is-selected", editing && "is-editing"]
+    .filter(Boolean)
+    .join(" ");
   return (
-    <g className="map-radar" transform={`translate(${origin.x + x} ${origin.y + y})`}>
-      <title>
-        {`${radar.id}\nDistância: ${formatDistance(radar.distancia)}\nDireção: ${radar.direcao}°`}
-      </title>
-      <circle r="20" className="map-radar-hit" />
+    <g
+      className={className}
+      transform={`translate(${origin.x + x} ${origin.y + y})`}
+      data-radar-id={radar.id}
+      role="button"
+      tabIndex={0}
+      aria-label={`Radar ${radar.id}: ${formatDistance(radar.distancia)}, ${formatDirection(radar.direcao)}`}
+      aria-pressed={selected}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          onSelect(radar.id);
+        }
+      }}
+      {...(editing ? dragHandlers : {})}
+    >
+      {!selected && (
+        <title>
+          {`${radar.id}\nDistância: ${formatDistance(radar.distancia)}\nDireção: ${formatDirection(radar.direcao)}`}
+        </title>
+      )}
+      <circle r="22" className="map-radar-hit" />
+      {editing && <circle r="19" className="map-radar-pulse" />}
       <circle r="11" className="map-radar-dot" />
       <text y="32" textAnchor="middle">{radar.id}</text>
+    </g>
+  );
+}
+
+/** Posição anterior de um radar em reposicionamento e a linha até a nova. */
+function MoveTrail({ from, to, origin, k }) {
+  const a = toMapPoint(from.distancia, from.direcao, k);
+  const b = toMapPoint(to.distancia, to.direcao, k);
+  return (
+    <g className="map-trail" aria-hidden="true">
+      <line x1={origin.x + a.x} y1={origin.y + a.y} x2={origin.x + b.x} y2={origin.y + b.y} />
+      <circle cx={origin.x + a.x} cy={origin.y + a.y} r="9" />
     </g>
   );
 }
@@ -154,12 +197,46 @@ function ZoomControls({ onZoomIn, onZoomOut, onFit }) {
   );
 }
 
-export default function RadarMap({ radares }) {
+/**
+ * `onReposition(id, anterior, nova)` deve gravar a nova posição e devolver
+ * uma Promise; se ela falhar, o radar continua em edição com a mensagem.
+ */
+export default function RadarMap({ radares, onReposition }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
   const size = useElementSize(containerRef);
-  const { view, setView, zoomAt, dragging, handlers } = usePanZoom(svgRef, size);
   const userMoved = useRef(false);
+
+  const [selectedId, setSelectedId] = useState(null);
+  // Reposicionamento em curso: { id, original, draft, saving, error }.
+  const [edit, setEdit] = useState(null);
+  const radarDrag = useRef(null);
+
+  const origin = useRef({ x: 0, y: 0 });
+  const scale = useRef(1);
+
+  const pointToPolar = (point) =>
+    fromMapPoint(point.x - origin.current.x, point.y - origin.current.y, scale.current);
+
+  const placeDraft = (point) => {
+    setEdit((e) => (e && !e.saving ? { ...e, draft: pointToPolar(point), error: null } : e));
+  };
+
+  const handleTap = ({ point, target }) => {
+    const id = target?.closest?.("[data-radar-id]")?.dataset.radarId ?? null;
+    if (edit) {
+      if (id !== edit.id) placeDraft(point);
+      return;
+    }
+    setSelectedId(id);
+  };
+
+  const { view, setView, zoomAt, dragging, handlers } = usePanZoom(svgRef, size, {
+    onTap: handleTap,
+  });
+
+  origin.current = { x: size.width / 2 + view.x, y: size.height / 2 + view.y };
+  scale.current = view.k;
 
   const maxDistance = Math.max(0, ...radares.map((r) => r.distancia));
 
@@ -174,25 +251,109 @@ export default function RadarMap({ radares }) {
     if (!userMoved.current) fit();
   }, [fit]);
 
+  const selected = radares.find((r) => r.id === selectedId) ?? null;
+
+  // Fecha a janela se o radar sumir da lista (removido por outra pessoa).
+  useEffect(() => {
+    if (selectedId && !selected) {
+      setSelectedId(null);
+      setEdit(null);
+    }
+  }, [selectedId, selected]);
+
+  // Esc cancela o reposicionamento ou fecha a janela.
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    const onKey = (event) => {
+      if (event.key !== "Escape") return;
+      if (edit) {
+        if (!edit.saving) setEdit(null);
+      } else {
+        setSelectedId(null);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [selectedId, edit]);
+
+  const startEdit = () => {
+    if (!selected) return;
+    const original = { distancia: selected.distancia, direcao: selected.direcao };
+    setEdit({ id: selected.id, original, draft: original, saving: false, error: null });
+  };
+
+  const pin = async () => {
+    if (!edit || edit.saving) return;
+    const { id, original, draft } = edit;
+    if (draft.distancia === original.distancia && draft.direcao === original.direcao) {
+      setEdit(null);
+      return;
+    }
+    setEdit((e) => ({ ...e, saving: true, error: null }));
+    try {
+      await onReposition(id, original, draft);
+      setEdit(null);
+    } catch (err) {
+      setEdit((e) => e && { ...e, saving: false, error: err.message });
+    }
+  };
+
+  const localPoint = (event) => {
+    const rect = svgRef.current.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+
+  // Arrastar o próprio radar em edição; não deve mover o mapa.
+  const dragHandlers = {
+    onPointerDown: (event) => {
+      if (edit?.saving || (event.pointerType === "mouse" && event.button !== 0)) return;
+      event.stopPropagation();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      radarDrag.current = event.pointerId;
+    },
+    onPointerMove: (event) => {
+      if (radarDrag.current !== event.pointerId) return;
+      placeDraft(localPoint(event));
+    },
+    onPointerUp: (event) => {
+      if (radarDrag.current === event.pointerId) radarDrag.current = null;
+    },
+    onPointerCancel: (event) => {
+      if (radarDrag.current === event.pointerId) radarDrag.current = null;
+    },
+  };
+
   const markMoved = (handler) => (event) => {
     userMoved.current = true;
     handler?.(event);
   };
 
   const center = [size.width / 2, size.height / 2];
-  const origin = { x: size.width / 2 + view.x, y: size.height / 2 + view.y };
+  const o = origin.current;
+  const shown = (radar) => (edit?.id === radar.id ? { ...radar, ...edit.draft } : radar);
+  const selectedShown = selected && shown(selected);
+  const selectedPoint =
+    selectedShown && toMapPoint(selectedShown.distancia, selectedShown.direcao, view.k);
+
+  const svgClass = [
+    "radar-map-svg",
+    dragging && "is-dragging",
+    edit && "is-repositioning",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className="radar-map" ref={containerRef}>
       <svg
         ref={svgRef}
-        className={`radar-map-svg${dragging ? " is-dragging" : ""}`}
+        className={svgClass}
         width={size.width}
         height={size.height}
         viewBox={`0 0 ${size.width} ${size.height}`}
         role="application"
         tabIndex={0}
-        aria-label={`Mapa com ${radares.length} radares ao redor do servidor central. Arraste para mover, use a roda do mouse ou + e − para zoom e as setas para deslocar.`}
+        aria-label={`Mapa com ${radares.length} radares ao redor do servidor central. Arraste para mover, use a roda do mouse ou + e − para zoom e as setas para deslocar. Selecione um radar para ver seus dados.`}
         onPointerDown={markMoved(handlers.onPointerDown)}
         onPointerMove={handlers.onPointerMove}
         onPointerUp={handlers.onPointerUp}
@@ -203,12 +364,22 @@ export default function RadarMap({ radares }) {
           userMoved.current = true;
         }}
       >
-        <Grid size={size} origin={origin} k={view.k} />
-        <g transform={`translate(${origin.x} ${origin.y})`}>
+        <Grid size={size} origin={o} k={view.k} />
+        <g transform={`translate(${o.x} ${o.y})`}>
           <House />
         </g>
+        {edit && <MoveTrail from={edit.original} to={edit.draft} origin={o} k={view.k} />}
         {radares.map((radar) => (
-          <RadarPoint key={radar.id} radar={radar} origin={origin} k={view.k} />
+          <RadarPoint
+            key={radar.id}
+            radar={shown(radar)}
+            origin={o}
+            k={view.k}
+            selected={radar.id === selectedId}
+            editing={radar.id === edit?.id}
+            onSelect={(id) => !edit && setSelectedId(id)}
+            dragHandlers={dragHandlers}
+          />
         ))}
       </svg>
       <NorthPointer />
@@ -220,6 +391,21 @@ export default function RadarMap({ radares }) {
           fit();
         }}
       />
+      {selectedShown && (
+        <RadarPopover
+          radar={selectedShown}
+          anchor={{ x: o.x + selectedPoint.x, y: o.y + selectedPoint.y }}
+          containerSize={size}
+          edit={edit}
+          onClose={() => {
+            setEdit(null);
+            setSelectedId(null);
+          }}
+          onStartEdit={startEdit}
+          onCancelEdit={() => setEdit(null)}
+          onPin={pin}
+        />
+      )}
     </div>
   );
 }

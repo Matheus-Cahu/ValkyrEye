@@ -3,14 +3,29 @@
 // REACT_APP_API_URL, ex.: http://servidor:8080
 const BASE_URL = process.env.REACT_APP_API_URL ?? "";
 
-export async function fetchRadares(signal) {
-  const response = await fetch(`${BASE_URL}/radares`, {
-    signal,
-    headers: { Accept: "application/json" },
+async function request(path, { body, ...options } = {}) {
+  const response = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(body !== undefined && { "Content-Type": "application/json" }),
+    },
+    ...(body !== undefined && { body: JSON.stringify(body) }),
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.erro ?? `API respondeu ${response.status}`);
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.erro ?? `API respondeu ${response.status}`);
   }
   return response.json();
+}
+
+export function fetchRadares(signal) {
+  return request("/radares", { signal });
+}
+
+export function updateRadar(id, { distancia, direcao }) {
+  return request(`/radares/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: { distancia, direcao },
+  });
 }

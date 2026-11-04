@@ -3,6 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export const MIN_ZOOM = 0.005; // pixels por metro
 export const MAX_ZOOM = 50;
 
+/** Deslocamento máximo, em pixels, para um gesto ainda contar como toque. */
+const TAP_TOLERANCE_PX = 5;
+
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 /**
@@ -10,12 +13,17 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
  * centro da tela; `view.k` é a escala em pixels por metro.
  *
  * Arrastar com mouse, toque ou caneta move o mapa; roda do mouse, pinça e
- * duplo clique aplicam zoom em torno do ponteiro.
+ * duplo clique aplicam zoom em torno do ponteiro. Um toque sem arrasto chama
+ * `onTap({ point, target })`: o ponto em coordenadas do elemento e o alvo do
+ * pointerdown (a captura do ponteiro redireciona o pointerup para o SVG).
  */
-export function usePanZoom(targetRef, size) {
+export function usePanZoom(targetRef, size, { onTap } = {}) {
   const [view, setView] = useState({ x: 0, y: 0, k: 1 });
   const pointers = useRef(new Map());
+  const gesture = useRef({ start: null, target: null, moved: false });
   const [dragging, setDragging] = useState(false);
+  const onTapRef = useRef(onTap);
+  onTapRef.current = onTap;
 
   /** Zoom por `factor` mantendo fixo o ponto (px, py) da tela. */
   const zoomAt = useCallback(
@@ -58,7 +66,13 @@ export function usePanZoom(targetRef, size) {
   const onPointerDown = (event) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    pointers.current.set(event.pointerId, localPoint(event));
+    const point = localPoint(event);
+    if (pointers.current.size === 0) {
+      gesture.current = { start: point, target: event.target, moved: false };
+    } else {
+      gesture.current.moved = true; // multitoque nunca é um toque simples
+    }
+    pointers.current.set(event.pointerId, point);
     setDragging(true);
   };
 
@@ -67,6 +81,10 @@ export function usePanZoom(targetRef, size) {
     const previous = map.get(event.pointerId);
     if (!previous) return;
     const current = localPoint(event);
+    const { start } = gesture.current;
+    if (start && Math.hypot(current.x - start.x, current.y - start.y) > TAP_TOLERANCE_PX) {
+      gesture.current.moved = true;
+    }
 
     if (map.size === 1) {
       panBy(current.x - previous.x, current.y - previous.y);
@@ -82,8 +100,12 @@ export function usePanZoom(targetRef, size) {
   };
 
   const onPointerEnd = (event) => {
-    pointers.current.delete(event.pointerId);
-    if (pointers.current.size === 0) setDragging(false);
+    if (!pointers.current.delete(event.pointerId)) return;
+    if (pointers.current.size > 0) return;
+    setDragging(false);
+    if (event.type === "pointerup" && !gesture.current.moved) {
+      onTapRef.current?.({ point: localPoint(event), target: gesture.current.target });
+    }
   };
 
   const onDoubleClick = (event) => {

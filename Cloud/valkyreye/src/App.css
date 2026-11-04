@@ -121,3 +121,151 @@ body {
   background: var(--north);
   clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
 }
+
+/* Botões */
+
+.btn {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-primary {
+  border-color: var(--radar);
+  background: var(--radar);
+  color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2468d6;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.btn:disabled,
+.icon-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.btn:focus-visible,
+.icon-button:focus-visible {
+  outline: 2px solid var(--radar-ring);
+  outline-offset: 2px;
+}
+
+/* Aviso inferior */
+
+.toast {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--header-bg);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-size: 0.875rem;
+  transform: translateX(-50%);
+  animation: toast-in 160ms ease-out;
+}
+
+.toast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.toast-error {
+  color: var(--error);
+}
+
+.toast .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
+}
+
+/* No celular, fica acima da legenda e dos controles de zoom e ocupa a largura. */
+@media (max-width: 640px) {
+  .toast {
+    left: 16px;
+    right: 16px;
+    bottom: 152px;
+    max-width: none;
+    flex-wrap: wrap;
+    transform: none;
+  }
+
+  .toast-body {
+    flex: 1 1 100%;
+  }
+
+  .toast .btn {
+    flex: 1;
+  }
+
+  .toast {
+    animation-name: toast-in-mobile;
+  }
+}
+
+@keyframes toast-in-mobile {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

@@ -56,8 +56,11 @@ Cloud/
         ├── App.js       página, atualização periódica e estado
         ├── api.js       chamadas à API
         └── components/
-            ├── RadarMap.js    mapa em SVG
-            └── usePanZoom.js  arrastar e zoom
+            ├── RadarMap.js      mapa, seleção e reposicionamento
+            ├── RadarPopover.js  janela com os dados do radar
+            ├── Toast.js         aviso inferior com desfazer
+            ├── usePanZoom.js    arrastar, zoom e detecção de toque
+            └── format.js        formatação de distância e direção
 ```
 
 ## Modelo de dados
@@ -202,6 +205,20 @@ A lista é consultada a cada 10 segundos.
 
 Depois que o mapa é movido, a atualização periódica não altera mais a
 visualização; o botão de ajuste volta ao enquadramento automático.
+
+#### Reposicionar um radar
+
+1. Clique ou toque em um radar para abrir a janela com distância e direção.
+2. Em **Reposicionar**, arraste o radar ou toque no mapa no novo local. A
+   janela mostra os valores novos e os anteriores, e uma linha tracejada liga
+   a posição antiga à nova. Arrastar fora do radar continua movendo o mapa.
+3. **Fixar posição** grava `distancia` e `direcao` com `PATCH /radares/:id`
+   (resolução de 0,1 m e 0,1°). **Cancelar** ou `Esc` descarta a mudança.
+4. Um aviso na parte inferior oferece **Desfazer reposicionamento** por 15
+   segundos (o prazo pausa com o ponteiro ou o foco sobre o aviso). Desfazer
+   grava de volta a posição anterior.
+
+Se a gravação falhar, o radar continua em edição com a mensagem de erro.
 
 ### Acessar o banco com psql
 
