@@ -1,0 +1,28 @@
+// Gerado por `npm run db:pull` a partir do banco criado por ../db/init.sql.
+// O init.sql é a fonte do schema: altere-o primeiro e depois rode db:pull.
+// Não use `prisma migrate` neste projeto.
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ocorrencias {
+  id         BigInt   @id @default(autoincrement())
+  radar      String
+  timestamp  DateTime @default(now()) @db.Timestamptz(6)
+  analisada  Boolean  @default(false)
+  assinatura Json
+  radares    radares  @relation(fields: [radar], references: [id])
+
+  @@index([timestamp], map: "ocorrencias_pendentes_idx", where: raw("(NOT analisada)"))
+  @@index([radar, timestamp(sort: Desc)])
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model radares {
+  id          String        @id
+  distancia   Float
+  direcao     Float
+  ocorrencias ocorrencias[]
+}

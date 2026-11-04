@@ -1,0 +1,123 @@
+:root {
+  --page-bg: #1f2124;
+  --header-bg: #26292d;
+  --border: #3a3e44;
+  --text: #eceef1;
+  --text-muted: #a3a9b2;
+  --map-bg: #6b6f75;
+  --map-grid: #82878e;
+  --map-grid-text: #c9ccd1;
+  --house: #f4f5f7;
+  --house-halo: rgba(255, 255, 255, 0.12);
+  --north: #e5383b;
+  --radar: #2f7cf6;
+  --radar-ring: #dbe8ff;
+  --error: #ff8f8f;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.04em;
+}
+
+.status {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.app-map {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--map-bg);
+}
+
+.map-empty {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  font-size: 0.875rem;
+}
+
+.map-legend {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  margin: 0;
+  padding: 10px 12px;
+  list-style: none;
+  border-radius: 6px;
+  background: rgba(31, 33, 36, 0.8);
+  font-size: 0.8125rem;
+}
+
+.map-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-legend li + li {
+  margin-top: 6px;
+}
+
+.map-legend span {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+}
+
+.legend-house {
+  background: var(--house);
+  clip-path: polygon(50% 0, 100% 45%, 85% 45%, 85% 100%, 15% 100%, 15% 45%, 0 45%);
+}
+
+.legend-radar {
+  border-radius: 50%;
+  background: var(--radar);
+  box-shadow: 0 0 0 2px var(--radar-ring);
+}
+
+.legend-north {
+  background: var(--north);
+  clip-path: polygon(50% 0, 100% 100%, 50% 80%, 0 100%);
+}

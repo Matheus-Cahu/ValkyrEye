@@ -1,0 +1,91 @@
+.radar-map {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--map-bg);
+}
+
+.radar-map-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.map-rings line,
+.map-rings circle {
+  fill: none;
+  stroke: var(--map-grid);
+  stroke-width: 1.5;
+}
+
+.map-rings circle {
+  stroke-dasharray: 6 6;
+}
+
+.map-rings text {
+  fill: var(--map-grid-text);
+  font-size: 14px;
+}
+
+.map-house path,
+.map-house rect {
+  fill: var(--house);
+}
+
+.map-house .map-house-door {
+  fill: var(--map-bg);
+}
+
+.map-house-halo {
+  fill: var(--house-halo);
+}
+
+.map-north {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: var(--north);
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.map-north svg {
+  width: 22px;
+  height: 38px;
+}
+
+.map-north path {
+  fill: var(--north);
+}
+
+.map-radar {
+  cursor: default;
+}
+
+.map-radar-hit {
+  fill: transparent;
+}
+
+.map-radar-dot {
+  fill: var(--radar);
+  stroke: var(--radar-ring);
+  stroke-width: 3;
+}
+
+.map-radar:hover .map-radar-dot {
+  stroke-width: 6;
+}
+
+.map-radar text {
+  fill: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: var(--map-bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
