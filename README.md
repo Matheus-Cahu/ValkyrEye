@@ -1,3 +1,5 @@
+<img width="201" height="201" alt="Y1S2_BADGE_Valkyrie_L" src="https://github.com/user-attachments/assets/3b061180-3577-4f25-87f1-a3dd105119d9" />
+
 # ValkyrEye
 
 Sistema experimental de monitoramento com pontos de detecção, rádio LoRa, um
