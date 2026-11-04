@@ -13,7 +13,7 @@ O fluxo completo do sistema está em [Arquitetura](../docs/ARQUITETURA.md).
               │ HTTP/JSON                         │
               ▼                                   ▼
  ┌──────────────────────────┐        ┌─────────────────────────┐
- │ api  (Express 5, :8080)  │        │ valkyreye (React, :3000)│  em desenvolvimento
+ │ api  (Express 5, :8080)  │        │ valkyreye (React, :3000)│  modo dev  
  │ CRUD radares/ocorrências │◄───────┤ painel de visualização  │
  └────────────┬─────────────┘        └─────────────────────────┘
               │ SQL (pg)
@@ -29,7 +29,7 @@ O fluxo completo do sistema está em [Arquitetura](../docs/ARQUITETURA.md).
 | `db` | [docker-compose.yml](docker-compose.yml) | PostgreSQL 17. Schema criado por [db/init.sql](db/init.sql). Porta publicada só em `127.0.0.1`. |
 | `api` | [api/](api/) | API REST em Express 5 que acessa o banco com `pg` e valida todas as entradas. |
 | Prisma Studio | [api/prisma/](api/prisma/) | Interface web para visualizar e editar o banco durante o desenvolvimento. Roda na máquina local, fora dos containers. |
-| `valkyreye` | [valkyreye/](valkyreye/) | Front-end React, ainda com o modelo inicial do create-react-app. |
+| `valkyreye` | [valkyreye/](valkyreye/) | Front-end React com o mapa dos radares em torno da central. |
 
 Ainda não implementados: upload e armazenamento das imagens, classificação e
 autenticação na API. Até lá, a API não deve ser exposta fora de uma rede
@@ -51,7 +51,11 @@ Cloud/
 │       ├── db.js        pool de conexões PostgreSQL
 │       ├── http.js      validação e tradução de erros do banco
 │       └── routes/      radares.js e ocorrencias.js
-└── valkyreye/           front-end React
+└── valkyreye/
+    └── src/
+        ├── App.js       página, atualização periódica e estado
+        ├── api.js       chamadas à API
+        └── components/RadarMap.js  mapa em SVG
 ```
 
 ## Modelo de dados
@@ -65,8 +69,8 @@ radares 1 ──── N ocorrencias
 | Coluna | Tipo | Regras |
 | --- | --- | --- |
 | `id` | `TEXT` (PK) | Mesmo `sensor_id` do alerta LoRa, ex.: `radar-01`. Letras, números, `-` e `_`, até 64 caracteres. |
-| `distancia` | `DOUBLE PRECISION` | Distância de referência em cm, maior que 0. |
-| `direcao` | `DOUBLE PRECISION` | Direção da montagem em graus, de 0 (inclusive) a 360 (exclusive). |
+| `distancia` | `DOUBLE PRECISION` | Distância do radar até o servidor central, em metros, maior que 0. |
+| `direcao` | `DOUBLE PRECISION` | Direção do radar vista da central, em graus a partir do norte no sentido horário (90 = leste), de 0 (inclusive) a 360 (exclusive). |
 
 **`ocorrencias`**
 
@@ -107,7 +111,7 @@ Exemplo:
 ```bash
 curl -X POST localhost:8080/radares \
   -H 'Content-Type: application/json' \
-  -d '{"id": "radar-01", "distancia": 310, "direcao": 45}'
+  -d '{"id": "radar-01", "distancia": 120, "direcao": 45}'
 
 curl -X POST localhost:8080/ocorrencias \
   -H 'Content-Type: application/json' \
@@ -164,6 +168,28 @@ npm run studio       # abra http://localhost:5555
 O Studio conecta em `localhost:POSTGRES_PORT` com as credenciais de
 `Cloud/.env`. Para outro banco, defina `DATABASE_URL`. Edições feitas no
 Studio vão direto para o banco e não passam pelas validações da API.
+
+### Front-end
+
+Com `db` e `api` rodando:
+
+```bash
+cd valkyreye
+npm install          # primeira vez
+npm start            # abre http://localhost:3000
+npm test             # testes
+```
+
+Em desenvolvimento, o servidor do React encaminha as chamadas para
+`http://localhost:8080` (campo `proxy` do `package.json`). Para apontar o build
+para outra API, defina `REACT_APP_API_URL` antes do `npm run build`; nesse caso a
+API precisa permitir CORS, o que ainda não está configurado.
+
+O mapa coloca o servidor central no centro, com o norte para cima, e desenha
+cada radar a partir de `distancia` e `direcao`:
+`x = distancia · sen(direcao)` (leste) e `y = distancia · cos(direcao)` (norte).
+A escala se ajusta ao radar mais distante, e os anéis tracejados marcam
+distâncias em metros. A lista é consultada a cada 10 segundos.
 
 ### Acessar o banco com psql
 

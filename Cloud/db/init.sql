@@ -4,9 +4,10 @@ CREATE TABLE radares (
     -- Mesmo identificador enviado pelo sensor (sensor_id), ex.: "radar-01".
     id        TEXT PRIMARY KEY
               CHECK (id ~ '^[A-Za-z0-9_-]{1,64}$'),
-    -- Distância de referência medida pelo radar, em centímetros.
+    -- Posição do radar em relação ao servidor central (coordenadas polares):
+    -- distância em metros.
     distancia DOUBLE PRECISION NOT NULL CHECK (distancia > 0),
-    -- Direção da montagem em graus (0 = norte, sentido horário).
+    -- Direção em graus a partir do norte, no sentido horário (90 = leste).
     direcao   DOUBLE PRECISION NOT NULL CHECK (direcao >= 0 AND direcao < 360)
 );
 
