@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import { fetchRadares, updateRadar } from "./api";
+import { fetchOcorrencias, fetchRadares, updateOcorrencia, updateRadar } from "./api";
 import RadarMap from "./components/RadarMap";
 import Toast from "./components/Toast";
 import { satelliteRadius, useGeolocation, useSatelliteImage } from "./useSatellite";
@@ -61,6 +61,59 @@ function satelliteNote(location, image) {
   return null;
 }
 
+/**
+ * Ocorrências ainda não analisadas, agrupadas por radar (mais recentes
+ * primeiro), consultadas junto com os radares.
+ */
+function useOcorrenciasPendentes() {
+  const [pending, setPending] = useState([]);
+  // Mesmo papel do contador em useRadares: ignora consultas anteriores a
+  // uma marcação local, que trariam de volta ocorrências já analisadas.
+  const revision = useRef(0);
+
+  useEffect(() => {
+    let controller;
+    const load = async () => {
+      controller?.abort();
+      controller = new AbortController();
+      const startedAt = revision.current;
+      try {
+        const rows = await fetchOcorrencias({ analisada: false, limit: 500 }, controller.signal);
+        if (startedAt === revision.current) setPending(rows);
+      } catch (err) {
+        // Mantém os alertas conhecidos; a falha da API já aparece no status.
+        if (err.name !== "AbortError") console.error(err);
+      }
+    };
+    load();
+    const timer = setInterval(load, REFRESH_MS);
+    return () => {
+      clearInterval(timer);
+      controller?.abort();
+    };
+  }, []);
+
+  const markAnalyzed = useCallback(async (ids) => {
+    revision.current += 1;
+    const results = await Promise.allSettled(
+      ids.map((id) => updateOcorrencia(id, { analisada: true }))
+    );
+    revision.current += 1;
+    const done = new Set(ids.filter((_, i) => results[i].status === "fulfilled"));
+    setPending((prev) => prev.filter((o) => !done.has(o.id)));
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
+  }, []);
+
+  const byRadar = useMemo(() => {
+    const groups = {};
+    for (const o of pending) (groups[o.radar] ??= []).push(o);
+    return groups;
+  }, [pending]);
+
+  return { byRadar, markAnalyzed };
+}
+
 function Status({ radares, error, updatedAt, loading }) {
   if (loading) return <span className="status">Carregando…</span>;
   if (error) {
@@ -80,6 +133,7 @@ function Status({ radares, error, updatedAt, loading }) {
 
 export default function App() {
   const { moveRadar, ...state } = useRadares();
+  const ocorrencias = useOcorrenciasPendentes();
   // { key, message, undo?: { id, from }, busy?, error? }
   const [toast, setToast] = useState(null);
   // Estável entre renders, para a atualização periódica não reiniciar o prazo do aviso.
@@ -125,6 +179,8 @@ export default function App() {
         <RadarMap
           radares={state.radares}
           onReposition={reposition}
+          alerts={ocorrencias.byRadar}
+          onMarkAnalyzed={ocorrencias.markAnalyzed}
           satellite={showSatellite && satellite.href ? satellite : null}
           satelliteControl={{
             active: showSatellite,
@@ -148,6 +204,7 @@ export default function App() {
         <ul className="map-legend" aria-label="Legenda">
           <li><span className="legend-house" aria-hidden="true" />Servidor central</li>
           <li><span className="legend-radar" aria-hidden="true" />Radar</li>
+          <li><span className="legend-alert" aria-hidden="true" />Ocorrência pendente</li>
           <li><span className="legend-north" aria-hidden="true" />Norte</li>
         </ul>
         {toast && (

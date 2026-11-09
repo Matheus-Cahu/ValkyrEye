@@ -46,3 +46,12 @@ export async function fetchSatelite({ lat, lon, raio }, signal) {
   }
   return response.blob();
 }
+
+/** Ocorrências, mais recentes primeiro. Filtros: radar, analisada, limit, offset. */
+export function fetchOcorrencias(filters, signal) {
+  return request(`/ocorrencias?${new URLSearchParams(filters)}`, { signal });
+}
+
+export function updateOcorrencia(id, changes) {
+  return request(`/ocorrencias/${encodeURIComponent(id)}`, { method: "PATCH", body: changes });
+}

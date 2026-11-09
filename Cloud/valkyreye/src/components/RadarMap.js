@@ -13,6 +13,7 @@ const FIT_FRACTION = 0.46;
 const RING_SPACING_PX = 80;
 const MAX_RINGS = 80;
 const FALLBACK_SIZE = { width: 800, height: 600 };
+const EMPTY = [];
 
 /** Arredonda para cima até 1, 2 ou 5 × 10^n, para os anéis terem valores redondos. */
 function niceCeil(value) {
@@ -134,9 +135,14 @@ function Grid({ size, origin, k }) {
   );
 }
 
-function RadarPoint({ radar, origin, k, selected, editing, onSelect, dragHandlers }) {
+function RadarPoint({ radar, origin, k, selected, editing, alert, onSelect, dragHandlers }) {
   const { x, y } = toMapPoint(radar.distancia, radar.direcao, k);
-  const className = ["map-radar", selected && "is-selected", editing && "is-editing"]
+  const className = [
+    "map-radar",
+    selected && "is-selected",
+    editing && "is-editing",
+    alert && "is-alert",
+  ]
     .filter(Boolean)
     .join(" ");
   return (
@@ -146,7 +152,7 @@ function RadarPoint({ radar, origin, k, selected, editing, onSelect, dragHandler
       data-radar-id={radar.id}
       role="button"
       tabIndex={0}
-      aria-label={`Radar ${radar.id}: ${formatDistance(radar.distancia)}, ${formatDirection(radar.direcao)}`}
+      aria-label={`Radar ${radar.id}${alert ? ", com ocorrência pendente" : ""}: ${formatDistance(radar.distancia)}, ${formatDirection(radar.direcao)}`}
       aria-pressed={selected}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
@@ -159,10 +165,16 @@ function RadarPoint({ radar, origin, k, selected, editing, onSelect, dragHandler
     >
       {!selected && (
         <title>
-          {`${radar.id}\nDistância: ${formatDistance(radar.distancia)}\nDireção: ${formatDirection(radar.direcao)}`}
+          {`${radar.id}${alert ? " · ocorrência pendente" : ""}\nDistância: ${formatDistance(radar.distancia)}\nDireção: ${formatDirection(radar.direcao)}`}
         </title>
       )}
       <circle r="22" className="map-radar-hit" />
+      {alert && (
+        <>
+          <circle r="11" className="map-radar-wave" />
+          <circle r="11" className="map-radar-wave is-delayed" />
+        </>
+      )}
       {editing && <circle r="19" className="map-radar-pulse" />}
       <circle r="11" className="map-radar-dot" />
       <text y="32" textAnchor="middle">{radar.id}</text>
@@ -242,8 +254,17 @@ function ZoomControls({ onZoomIn, onZoomOut, onFit, satelliteControl }) {
  * uma Promise; se ela falhar, o radar continua em edição com a mensagem.
  * `satellite` ({ href, raio }) desenha a imagem sob a grade;
  * `satelliteControl` ({ active, busy, onToggle }) mostra o botão da camada.
+ * `alerts` mapeia id do radar para suas ocorrências pendentes (mais recentes
+ * primeiro); `onMarkAnalyzed(ids)` as marca como analisadas.
  */
-export default function RadarMap({ radares, onReposition, satellite, satelliteControl }) {
+export default function RadarMap({
+  radares,
+  onReposition,
+  satellite,
+  satelliteControl,
+  alerts = {},
+  onMarkAnalyzed,
+}) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
   const size = useElementSize(containerRef);
@@ -421,6 +442,7 @@ export default function RadarMap({ radares, onReposition, satellite, satelliteCo
             k={view.k}
             selected={radar.id === selectedId}
             editing={radar.id === edit?.id}
+            alert={Boolean(alerts[radar.id]?.length)}
             onSelect={(id) => !edit && setSelectedId(id)}
             dragHandlers={dragHandlers}
           />
@@ -449,6 +471,8 @@ export default function RadarMap({ radares, onReposition, satellite, satelliteCo
           onStartEdit={startEdit}
           onCancelEdit={() => setEdit(null)}
           onPin={pin}
+          pending={alerts[selectedShown.id] ?? EMPTY}
+          onMarkAnalyzed={onMarkAnalyzed}
         />
       )}
     </div>

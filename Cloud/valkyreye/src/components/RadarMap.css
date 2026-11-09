@@ -353,3 +353,148 @@
     opacity: 0.5;
   }
 }
+
+/* Radar com ocorrência pendente */
+
+.map-radar.is-alert .map-radar-dot {
+  fill: var(--alert);
+  stroke: var(--alert-ring);
+}
+
+.map-radar-wave {
+  fill: none;
+  stroke: var(--alert);
+  stroke-width: 3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: radar-wave 1.8s ease-out infinite;
+  pointer-events: none;
+}
+
+.map-radar-wave.is-delayed {
+  animation-delay: 0.9s;
+}
+
+@keyframes radar-wave {
+  from {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(3.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-radar-wave {
+    animation: none;
+    opacity: 0.6;
+    transform: scale(1.8);
+  }
+
+  .map-radar-wave.is-delayed {
+    display: none;
+  }
+}
+
+/* Ocorrência na janela do radar */
+
+.radar-popover-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.radar-popover-ocorrencia {
+  margin: 0 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.ocorrencia-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.ocorrencia-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ocorrencia-badge.is-pending {
+  background: rgba(239, 68, 68, 0.18);
+  color: var(--alert-ring);
+}
+
+.signature {
+  margin: 0 0 10px;
+}
+
+.signature svg {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.signature figcaption {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  text-align: center;
+}
+
+.signature-slice {
+  fill: rgba(255, 255, 255, 0.04);
+  fill-rule: evenodd;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 0.5;
+}
+
+.signature-slice.is-hit {
+  fill: rgba(59, 139, 255, 0.1);
+}
+
+.signature-ring {
+  fill: none;
+  stroke: var(--map-grid);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.signature-ring-label {
+  fill: var(--text-muted);
+  font-size: 9px;
+  paint-order: stroke;
+  stroke: var(--header-bg);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.signature-arc {
+  fill: none;
+  stroke: var(--signature);
+  stroke-width: 5;
+}
+
+.signature-radar {
+  fill: var(--radar);
+  stroke: var(--radar-ring);
+  stroke-width: 2;
+}
+
+.map-radar.is-alert.is-selected .map-radar-dot,
+.map-radar.is-alert:focus-visible .map-radar-dot {
+  stroke: var(--text);
+}

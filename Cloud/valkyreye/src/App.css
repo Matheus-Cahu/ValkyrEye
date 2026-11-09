@@ -12,6 +12,9 @@
   --north: #e5383b;
   --radar: #2f7cf6;
   --radar-ring: #dbe8ff;
+  --alert: #ef4444;
+  --alert-ring: #fecaca;
+  --signature: #3b8bff;
   --error: #ff8f8f;
   --logo: #facc15;
 }
@@ -309,4 +312,10 @@ body {
   color: var(--text-muted);
   font-size: 0.6875rem;
   pointer-events: none;
+}
+
+.legend-alert {
+  border-radius: 50%;
+  background: var(--alert);
+  box-shadow: 0 0 0 2px var(--alert-ring), 0 0 0 5px rgba(239, 68, 68, 0.35);
 }

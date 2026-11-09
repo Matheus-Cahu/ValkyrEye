@@ -59,7 +59,8 @@ Cloud/
         ├── useSatellite.js  geolocalização e imagem de satélite
         └── components/
             ├── RadarMap.js      mapa, seleção e reposicionamento
-            ├── RadarPopover.js  janela com os dados do radar
+            ├── RadarPopover.js  janela com os dados do radar e a ocorrência
+            ├── SignatureView.js desenho da assinatura ao redor do radar
             ├── Toast.js         aviso inferior com desfazer
             ├── usePanZoom.js    arrastar, zoom e detecção de toque
             └── format.js        formatação de distância e direção
@@ -260,6 +261,31 @@ A primeira imagem de cada região leva de 10 a 20 s; as seguintes vêm do cache.
 
 Fora do Docker, defina `GEE_PRIVATE_KEY_FILE=../secrets/gee-service-account.json`
 ao rodar `npm run dev`.
+
+#### Ocorrências
+
+Junto com os radares, o painel consulta a cada 10 segundos as ocorrências com
+`analisada = false`. Um radar com alguma pendente fica **vermelho e pulsando**.
+
+Ao abrir o radar, a janela mostra a ocorrência pendente mais recente (ou, sem
+pendentes, a última registrada) com a data e um desenho da `assinatura`:
+
+- o círculo central é o radar;
+- o espaço ao redor é dividido em `n` fatias iguais de `360°/n`, uma por
+  tupla, na ordem do vetor, começando no topo e seguindo no sentido horário;
+- em cada fatia, um arco azul marca a distância medida (anéis tracejados de
+  referência; escala mínima de 4 m, o alcance do HC-SR04). Distância `0` é
+  tratada como "sem eco" e deixa a fatia vazia.
+
+**Marcar como analisada** grava `analisada: true` em todas as pendentes do
+radar (`PATCH /ocorrencias/:id`), e o alerta some.
+
+Para testar:
+
+```bash
+curl -X POST localhost:8080/ocorrencias -H 'Content-Type: application/json' \
+  -d '{"radar": "radar-01", "assinatura": [[0, 300], [45, 120], [90, 310], [135, 0], [180, 290], [225, 305], [270, 80], [315, 300]]}'
+```
 
 #### Reposicionar um radar
 

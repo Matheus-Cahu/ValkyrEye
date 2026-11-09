@@ -14,14 +14,35 @@ const jsonResponse = (body, status = 200) => ({
   json: () => Promise.resolve(body),
 });
 
-beforeEach(() => {
-  global.fetch = jest.fn((url, options = {}) => {
-    if (options.method === "PATCH") {
-      const id = decodeURIComponent(url.split("/").pop());
-      return Promise.resolve(jsonResponse({ id, ...JSON.parse(options.body) }));
+/** Ocorrências devolvidas pela API simulada; cada teste pode preencher. */
+let ocorrencias = [];
+
+function fakeApi(url, options = {}) {
+  if (options.method === "PATCH") {
+    const id = decodeURIComponent(url.split("/").pop());
+    const body = JSON.parse(options.body);
+    if (url.startsWith("/ocorrencias/")) {
+      const o = ocorrencias.find((x) => x.id === id);
+      Object.assign(o, body);
+      return Promise.resolve(jsonResponse(o));
     }
-    return Promise.resolve(jsonResponse(radares));
-  });
+    return Promise.resolve(jsonResponse({ id, ...body }));
+  }
+  if (url.startsWith("/ocorrencias")) {
+    const query = new URLSearchParams(url.split("?")[1]);
+    const rows = ocorrencias.filter(
+      (o) =>
+        (!query.has("radar") || o.radar === query.get("radar")) &&
+        (!query.has("analisada") || String(o.analisada) === query.get("analisada"))
+    );
+    return Promise.resolve(jsonResponse(rows.slice(0, Number(query.get("limit") ?? 100))));
+  }
+  return Promise.resolve(jsonResponse(radares));
+}
+
+beforeEach(() => {
+  ocorrencias = [];
+  global.fetch = jest.fn(fakeApi);
 });
 
 const patchCalls = () =>
@@ -156,11 +177,9 @@ test("falha ao gravar mantém a edição e mostra o erro; Esc cancela", async ()
   render(<App />);
   const label = await screen.findByText("radar-01");
   global.fetch.mockImplementation((url, options = {}) =>
-    Promise.resolve(
-      options.method === "PATCH"
-        ? jsonResponse({ erro: "Valor rejeitado pelo banco de dados" }, 400)
-        : jsonResponse(radares)
-    )
+    options.method === "PATCH"
+      ? Promise.resolve(jsonResponse({ erro: "Valor rejeitado pelo banco de dados" }, 400))
+      : fakeApi(url, options)
   );
   tap(label, 400, 24);
   fireEvent.click(screen.getByRole("button", { name: "Reposicionar" }));
@@ -236,5 +255,55 @@ describe("imagem de satélite", () => {
     navigator.geolocation.getCurrentPosition.mockImplementation((_, fail) => fail({ code: 1 }));
     render(<App />);
     expect(await screen.findByText(/Permissão de localização negada/)).toBeInTheDocument();
+  });
+});
+
+describe("ocorrências", () => {
+  const pendente = {
+    id: "7",
+    radar: "radar-02",
+    timestamp: "2026-11-09T18:00:00.000Z",
+    analisada: false,
+    assinatura: [
+      [0, 120],
+      [90, 0],
+      [180, 250.5],
+      [270, 80],
+    ],
+  };
+
+  test("radar com ocorrência pendente fica em alerta e a janela mostra a assinatura", async () => {
+    ocorrencias = [{ ...pendente }];
+    render(<App />);
+    await screen.findByText("radar-01");
+    const radar = await screen.findByRole("button", { name: /radar-02, com ocorrência pendente/ });
+    expect(radar).toHaveClass("is-alert");
+    expect(screen.getByText("radar-01").closest("g")).not.toHaveClass("is-alert");
+
+    tap(screen.getByText("radar-02"), 400 + 50 * PX_PER_M, 300);
+    const dialog = screen.getByRole("dialog", { name: "Radar radar-02" });
+    expect(within(dialog).getByText("Pendente")).toBeInTheDocument();
+    // Quatro leituras: quatro fatias, e um arco azul para cada eco (90° sem eco).
+    expect(dialog.querySelectorAll(".signature-slice")).toHaveLength(4);
+    expect(dialog.querySelectorAll(".signature-arc")).toHaveLength(3);
+    expect(
+      within(dialog).getByRole("img", { name: /4 leituras; mais próxima a 80 cm, 270°/ })
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Marcar como analisada" }));
+    await waitFor(() => expect(radar).not.toHaveClass("is-alert"));
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/ocorrencias/7",
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ analisada: true }) })
+    );
+    // Sem pendentes, a janela mostra a última ocorrência, já analisada.
+    expect(await within(dialog).findByText("Analisada")).toBeInTheDocument();
+  });
+
+  test("radar sem ocorrências informa na janela", async () => {
+    render(<App />);
+    const label = await screen.findByText("radar-01");
+    tap(label, 400, 24);
+    expect(await screen.findByText("Nenhuma ocorrência registrada.")).toBeInTheDocument();
   });
 });
