@@ -307,3 +307,49 @@
   flex: 1;
   padding: 0 10px;
 }
+
+/* Imagem de satélite */
+
+.map-satellite {
+  opacity: 0.9;
+}
+
+/* Sobre a imagem, a grade e os rótulos precisam de mais contraste. */
+.radar-map-svg.has-satellite .map-grid line,
+.radar-map-svg.has-satellite .map-grid circle {
+  stroke: rgba(255, 255, 255, 0.55);
+}
+
+.radar-map-svg.has-satellite .map-grid text {
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.7);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
+.radar-map-svg.has-satellite .map-radar text {
+  stroke: rgba(0, 0, 0, 0.75);
+}
+
+.map-controls button[aria-pressed="true"] {
+  color: var(--radar-ring);
+  background: rgba(47, 124, 246, 0.35);
+}
+
+.map-controls button.is-busy svg {
+  animation: satellite-busy 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes satellite-busy {
+  to {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-controls button.is-busy svg {
+    animation: none;
+    opacity: 0.5;
+  }
+}

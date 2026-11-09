@@ -1,2 +1,6 @@
 node_modules/
 .env
+
+# Chaves de serviço (Earth Engine)
+secrets/*
+!secrets/.gitkeep

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import App from "./App";
 import { fromMapPoint, toMapPoint } from "./components/RadarMap";
+import { satelliteRadius } from "./useSatellite";
 
 const radares = [
   { id: "radar-01", distancia: 100, direcao: 0 },
@@ -174,4 +175,66 @@ test("falha ao gravar mantém a edição e mostra o erro; Esc cancela", async ()
   const dialog = screen.getByRole("dialog", { name: "Radar radar-01" });
   await waitFor(() => expect(within(dialog).getByText("100 m")).toBeInTheDocument());
   expect(within(dialog).getByRole("button", { name: "Reposicionar" })).toBeInTheDocument();
+});
+
+describe("imagem de satélite", () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, "geolocation", {
+      configurable: true,
+      value: {
+        getCurrentPosition: jest.fn((success) =>
+          success({ coords: { latitude: -23.16, longitude: -45.79, accuracy: 10 } })
+        ),
+      },
+    });
+    URL.createObjectURL = jest.fn(() => "blob:satelite");
+    URL.revokeObjectURL = jest.fn();
+    const radaresFetch = global.fetch;
+    global.fetch = jest.fn((url, options) =>
+      url.startsWith("/satelite")
+        ? Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob()) })
+        : radaresFetch(url, options)
+    );
+  });
+
+  afterEach(() => {
+    delete navigator.geolocation;
+  });
+
+  test("pede a região da localização atual e a desenha centrada na central", async () => {
+    render(<App />);
+    await screen.findByText("radar-01");
+    await waitFor(() => expect(document.querySelector(".map-satellite")).not.toBeNull());
+
+    // Radar mais distante a 100 m: 2 × 100 = 200 m, elevado ao mínimo de 3 km.
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/satelite?lat=-23.16000&lon=-45.79000&raio=3000",
+      expect.anything()
+    );
+    const image = document.querySelector(".map-satellite");
+    expect(image.getAttribute("href")).toBe("blob:satelite");
+    // 3 km para cada lado a 2,76 px/m, com a central em (400, 300).
+    expect(Number(image.getAttribute("width"))).toBeCloseTo(6000 * PX_PER_M);
+    expect(Number(image.getAttribute("x"))).toBeCloseTo(400 - 3000 * PX_PER_M);
+    expect(Number(image.getAttribute("y"))).toBeCloseTo(300 - 3000 * PX_PER_M);
+
+    fireEvent.click(screen.getByRole("button", { name: "Ocultar imagem de satélite" }));
+    expect(document.querySelector(".map-satellite")).toBeNull();
+  });
+
+  test.each([
+    [0, 3000],
+    [1500, 3000],
+    [1600, 5000],
+    [4000, 10000],
+    [50000, 20000],
+  ])("radar mais distante a %d m pede raio de %d m", (maxDistance, raio) => {
+    expect(satelliteRadius(maxDistance)).toBe(raio);
+  });
+
+  test("informa quando a localização é negada", async () => {
+    navigator.geolocation.getCurrentPosition.mockImplementation((_, fail) => fail({ code: 1 }));
+    render(<App />);
+    expect(await screen.findByText(/Permissão de localização negada/)).toBeInTheDocument();
+  });
 });

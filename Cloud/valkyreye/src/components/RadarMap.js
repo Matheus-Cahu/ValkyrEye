@@ -182,9 +182,49 @@ function MoveTrail({ from, to, origin, k }) {
   );
 }
 
-function ZoomControls({ onZoomIn, onZoomOut, onFit }) {
+/**
+ * Imagem de satélite centrada na central: um quadrado de lado 2·raio metros,
+ * com o norte para cima, desenhado na mesma escala dos radares.
+ */
+function SatelliteLayer({ href, raio, origin, k }) {
+  const side = 2 * raio * k;
+  return (
+    <image
+      className="map-satellite"
+      href={href}
+      x={origin.x - raio * k}
+      y={origin.y - raio * k}
+      width={side}
+      height={side}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    />
+  );
+}
+
+function SatelliteToggle({ active, busy, onToggle }) {
+  const label = active ? "Ocultar imagem de satélite" : "Mostrar imagem de satélite";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={busy ? "is-busy" : undefined}
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M13 7 9 3 5 7l4 4M17 11l4 4-4 4-4-4M8 12l4 4M16 8l-4-4" />
+        <path d="m15 6 3 3M3 21a6 6 0 0 0 6-6" />
+      </svg>
+    </button>
+  );
+}
+
+function ZoomControls({ onZoomIn, onZoomOut, onFit, satelliteControl }) {
   return (
     <div className="map-controls">
+      {satelliteControl && <SatelliteToggle {...satelliteControl} />}
       <button type="button" onClick={onZoomIn} aria-label="Aproximar" title="Aproximar">+</button>
       <button type="button" onClick={onZoomOut} aria-label="Afastar" title="Afastar">−</button>
       <button type="button" onClick={onFit} aria-label="Ajustar aos radares" title="Ajustar aos radares">
@@ -200,8 +240,10 @@ function ZoomControls({ onZoomIn, onZoomOut, onFit }) {
 /**
  * `onReposition(id, anterior, nova)` deve gravar a nova posição e devolver
  * uma Promise; se ela falhar, o radar continua em edição com a mensagem.
+ * `satellite` ({ href, raio }) desenha a imagem sob a grade;
+ * `satelliteControl` ({ active, busy, onToggle }) mostra o botão da camada.
  */
-export default function RadarMap({ radares, onReposition }) {
+export default function RadarMap({ radares, onReposition, satellite, satelliteControl }) {
   const containerRef = useRef(null);
   const svgRef = useRef(null);
   const size = useElementSize(containerRef);
@@ -339,6 +381,7 @@ export default function RadarMap({ radares, onReposition }) {
     "radar-map-svg",
     dragging && "is-dragging",
     edit && "is-repositioning",
+    satellite && "has-satellite",
   ]
     .filter(Boolean)
     .join(" ");
@@ -364,6 +407,7 @@ export default function RadarMap({ radares, onReposition }) {
           userMoved.current = true;
         }}
       >
+        {satellite && <SatelliteLayer {...satellite} origin={o} k={view.k} />}
         <Grid size={size} origin={o} k={view.k} />
         <g transform={`translate(${o.x} ${o.y})`}>
           <House />
@@ -390,6 +434,7 @@ export default function RadarMap({ radares, onReposition }) {
           userMoved.current = false;
           fit();
         }}
+        satelliteControl={satelliteControl}
       />
       {selectedShown && (
         <RadarPopover

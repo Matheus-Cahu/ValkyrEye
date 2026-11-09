@@ -28,6 +28,11 @@ services:
       PGDATABASE: ${POSTGRES_DB:-valkyreye}
       PGUSER: ${POSTGRES_USER:-valkyreye}
       PGPASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+      # Imagens de satélite (opcional): chave da conta de serviço em ./secrets.
+      GEE_PRIVATE_KEY_FILE: ${GEE_PRIVATE_KEY_FILE:-/run/secrets/gee/gee-service-account.json}
+      GEE_PROJECT: ${GEE_PROJECT:-}
+    volumes:
+      - ./secrets:/run/secrets/gee:ro
     ports:
       - "${API_PORT:-8080}:3000"
     depends_on:

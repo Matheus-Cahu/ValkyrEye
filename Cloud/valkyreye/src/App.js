@@ -3,6 +3,7 @@ import "./App.css";
 import { fetchRadares, updateRadar } from "./api";
 import RadarMap from "./components/RadarMap";
 import Toast from "./components/Toast";
+import { satelliteRadius, useGeolocation, useSatelliteImage } from "./useSatellite";
 
 const REFRESH_MS = 10_000;
 
@@ -51,6 +52,15 @@ function useRadares() {
   return { ...state, moveRadar };
 }
 
+/** Situação da camada de satélite, enquanto ela não pode ser mostrada. */
+function satelliteNote(location, image) {
+  if (location.status === "pending") return "Obtendo sua localização para a imagem de satélite…";
+  if (location.status === "error") return `Sem imagem de satélite: ${location.error}`;
+  if (image.status === "error") return `Sem imagem de satélite: ${image.error}`;
+  if (image.status === "loading" && !image.href) return "Carregando imagem de satélite…";
+  return null;
+}
+
 function Status({ radares, error, updatedAt, loading }) {
   if (loading) return <span className="status">Carregando…</span>;
   if (error) {
@@ -75,6 +85,16 @@ export default function App() {
   // Estável entre renders, para a atualização periódica não reiniciar o prazo do aviso.
   const dismissToast = useCallback(() => setToast(null), []);
 
+  const [showSatellite, setShowSatellite] = useState(true);
+  const location = useGeolocation();
+  const maxDistance = Math.max(0, ...state.radares.map((r) => r.distancia));
+  const satellite = useSatelliteImage(
+    location.coords,
+    satelliteRadius(maxDistance),
+    showSatellite && !state.loading
+  );
+  const note = showSatellite ? satelliteNote(location, satellite) : null;
+
   const reposition = async (id, from, to) => {
     await moveRadar(id, to);
     setToast({ key: Date.now(), message: `${id} reposicionado.`, undo: { id, from } });
@@ -94,11 +114,34 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>ValkyrEye</h1>
+        <div className="brand">
+          {/* Decorativo: o nome ao lado já identifica o projeto. */}
+          <img src={`${process.env.PUBLIC_URL}/logo.png`} alt="" width="32" height="32" />
+          <h1>ValkyrEye</h1>
+        </div>
         <Status {...state} />
       </header>
       <main className="app-map">
-        <RadarMap radares={state.radares} onReposition={reposition} />
+        <RadarMap
+          radares={state.radares}
+          onReposition={reposition}
+          satellite={showSatellite && satellite.href ? satellite : null}
+          satelliteControl={{
+            active: showSatellite,
+            busy: showSatellite && (location.status === "pending" || satellite.status === "loading"),
+            onToggle: () => setShowSatellite((v) => !v),
+          }}
+        />
+        {note && (
+          <p className="map-note" role="status">
+            {note}
+          </p>
+        )}
+        {showSatellite && satellite.href && (
+          <p className="map-attribution">
+            Contém dados modificados do Copernicus Sentinel · Google Earth Engine
+          </p>
+        )}
         {!state.loading && !state.error && state.radares.length === 0 && (
           <p className="map-empty">Nenhum radar cadastrado.</p>
         )}

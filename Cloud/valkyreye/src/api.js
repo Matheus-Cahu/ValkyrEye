@@ -29,3 +29,20 @@ export function updateRadar(id, { distancia, direcao }) {
     body: { distancia, direcao },
   });
 }
+
+/**
+ * Imagem de satélite (PNG) do quadrado de lado 2·raio metros centrado em
+ * (lat, lon), com o norte para cima. Devolve um Blob.
+ */
+export async function fetchSatelite({ lat, lon, raio }, signal) {
+  const query = new URLSearchParams({ lat: lat.toFixed(5), lon: lon.toFixed(5), raio });
+  const response = await fetch(`${BASE_URL}/satelite?${query}`, {
+    signal,
+    headers: { Accept: "image/png" },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.erro ?? `API respondeu ${response.status}`);
+  }
+  return response.blob();
+}
