@@ -3,6 +3,7 @@ import { pool } from "./db.js";
 import { errorHandler } from "./http.js";
 import { ocorrencias } from "./routes/ocorrencias.js";
 import { radares } from "./routes/radares.js";
+import { satelite } from "./routes/satelite.js";
 
 const app = express();
 app.disable("x-powered-by");
@@ -15,6 +16,7 @@ app.get("/health", async (req, res) => {
 
 app.use("/radares", radares);
 app.use("/ocorrencias", ocorrencias);
+app.use("/satelite", satelite);
 
 app.use((req, res) => res.status(404).json({ erro: "Rota não encontrada" }));
 app.use(errorHandler);

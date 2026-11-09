@@ -15,6 +15,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@google/earthengine": "1.7.48",
     "express": "^5.3.0",
     "pg": "^8.23.1"
   },

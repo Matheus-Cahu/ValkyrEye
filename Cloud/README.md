@@ -50,12 +50,20 @@ Cloud/
 │       ├── index.js     servidor, /health e montagem das rotas
 │       ├── db.js        pool de conexões PostgreSQL
 │       ├── http.js      validação e tradução de erros do banco
-│       └── routes/      radares.js e ocorrencias.js
+│       ├── earthengine.js  mosaico Sentinel-2 via Google Earth Engine
+│       └── routes/      radares.js, ocorrencias.js e satelite.js
 └── valkyreye/
     └── src/
         ├── App.js       página, atualização periódica e estado
         ├── api.js       chamadas à API
-        └── components/RadarMap.js  mapa em SVG
+        ├── useSatellite.js  geolocalização e imagem de satélite
+        └── components/
+            ├── RadarMap.js      mapa, seleção e reposicionamento
+            ├── RadarPopover.js  janela com os dados do radar e a ocorrência
+            ├── SignatureView.js desenho da assinatura ao redor do radar
+            ├── Toast.js         aviso inferior com desfazer
+            ├── usePanZoom.js    arrastar, zoom e detecção de toque
+            └── format.js        formatação de distância e direção
 ```
 
 ## Modelo de dados
@@ -105,6 +113,7 @@ Base: `http://localhost:8080`. Corpos em JSON. Erros respondem
 | `POST` | `/ocorrencias` | Cria (`radar`, `assinatura`; opcionais `timestamp` ISO 8601 e `analisada`) |
 | `PATCH` | `/ocorrencias/:id` | Altera qualquer campo, ex.: `{"analisada": true}` |
 | `DELETE` | `/ocorrencias/:id` | Remove |
+| `GET` | `/satelite?lat=&lon=&raio=` | PNG 1024×1024 do quadrado de lado `2·raio` m (100–20 000) centrado no ponto, norte para cima. 503 se o Earth Engine não estiver configurado, 502 se ele falhar |
 
 Exemplo:
 
@@ -139,6 +148,7 @@ cp .env.example .env     # troque POSTGRES_PASSWORD
 | `POSTGRES_PASSWORD` | obrigatória | Senha do banco, usada pelo `db`, pela `api` e pelo Prisma |
 | `POSTGRES_PORT` | `5432` | Porta do banco no host (`127.0.0.1`) |
 | `API_PORT` | `8080` | Porta da API no host |
+| `GEE_PROJECT` | `project_id` da chave | Projeto do Google Cloud registrado no Earth Engine |
 
 O `.env` está no `.gitignore`; não o versione.
 
@@ -188,8 +198,108 @@ API precisa permitir CORS, o que ainda não está configurado.
 O mapa coloca o servidor central no centro, com o norte para cima, e desenha
 cada radar a partir de `distancia` e `direcao`:
 `x = distancia · sen(direcao)` (leste) e `y = distancia · cos(direcao)` (norte).
-A escala se ajusta ao radar mais distante, e os anéis tracejados marcam
-distâncias em metros. A lista é consultada a cada 10 segundos.
+Ao carregar, a escala se ajusta para que o radar mais distante fique perto da
+borda. Os anéis tracejados marcam distâncias, com o passo ajustado ao zoom.
+A lista é consultada a cada 10 segundos.
+
+| Ação | Mouse | Toque | Teclado (mapa focado) |
+| --- | --- | --- | --- |
+| Mover | arrastar | arrastar com um dedo | setas |
+| Zoom | roda, duplo clique (Shift + duplo clique afasta) | pinça | `+` e `-` |
+| Ajustar aos radares | botão no canto inferior direito | botão | — |
+
+Depois que o mapa é movido, a atualização periódica não altera mais a
+visualização; o botão de ajuste volta ao enquadramento automático.
+
+#### Imagem de satélite
+
+Ao abrir o painel, o navegador pede a localização do usuário. Supõe-se que o
+operador está junto à central: essa posição vira o centro do mapa, e a API
+pede ao Google Earth Engine um mosaico **Sentinel-2** (10 m por pixel, mediana
+dos últimos 12 meses, nuvens removidas pela camada SCL) do quadrado em torno
+dela. A imagem é desenhada sob a grade, na mesma escala dos radares; o raio é
+de pelo menos 3 km (6 × 6 km, cerca de 6 m por pixel); acima disso, o dobro
+do radar mais distante, arredondado para 1, 2 ou 5 × 10ⁿ m (máximo 20 km). O botão no topo dos controles mostra ou oculta a camada.
+
+- A geolocalização só funciona em `localhost` ou HTTPS.
+- 10 m por pixel é a melhor resolução gratuita global; em escalas de poucos
+  metros a imagem fica borrada.
+- A API guarda até 32 imagens em memória por 12 horas (posição arredondada a
+  ~10 m), então recarregar o painel não gera nova consulta.
+
+Configuração (uma vez):
+
+1. No [Google Cloud](https://console.cloud.google.com/), crie ou escolha um
+   projeto e registre-o em <https://code.earthengine.google.com/register>
+   (uso não comercial/acadêmico é gratuito). Ative a **Earth Engine API**.
+2. Crie uma conta de serviço com dois papéis: **Service Usage Consumer**
+   (`roles/serviceusage.serviceUsageConsumer`) e um papel personalizado com
+   `earthengine.computations.create`, `earthengine.thumbnails.create` e
+   `earthengine.thumbnails.get`. O papel *Earth Engine Resource Viewer* não
+   basta (não gera miniaturas); o *Resource Writer* funciona, mas também
+   permite alterar assets.
+3. Gere a chave JSON em `Cloud/secrets/gee-service-account.json` (a pasta está
+   no `.gitignore`) e rode `docker compose up -d --build api`.
+
+Com o `gcloud` (troque `PROJETO`):
+
+```bash
+SA=valkyreye-gee@PROJETO.iam.gserviceaccount.com
+gcloud services enable earthengine.googleapis.com --project=PROJETO
+gcloud iam service-accounts create valkyreye-gee --project=PROJETO
+gcloud iam roles create valkyreyeSatellite --project=PROJETO \
+  --title="ValkyrEye satellite thumbnails" --stage=GA \
+  --permissions=earthengine.computations.create,earthengine.thumbnails.create,earthengine.thumbnails.get
+gcloud projects add-iam-policy-binding PROJETO --condition=None \
+  --member="serviceAccount:$SA" --role=projects/PROJETO/roles/valkyreyeSatellite
+gcloud projects add-iam-policy-binding PROJETO --condition=None \
+  --member="serviceAccount:$SA" --role=roles/serviceusage.serviceUsageConsumer
+gcloud iam service-accounts keys create secrets/gee-service-account.json --iam-account="$SA"
+```
+
+A primeira imagem de cada região leva de 10 a 20 s; as seguintes vêm do cache.
+
+Fora do Docker, defina `GEE_PRIVATE_KEY_FILE=../secrets/gee-service-account.json`
+ao rodar `npm run dev`.
+
+#### Ocorrências
+
+Junto com os radares, o painel consulta a cada 10 segundos as ocorrências com
+`analisada = false`. Um radar com alguma pendente fica **vermelho e pulsando**.
+
+Ao abrir o radar, a janela mostra a ocorrência pendente mais recente (ou, sem
+pendentes, a última registrada) com a data e um desenho da `assinatura`:
+
+- o círculo central é o radar;
+- o espaço ao redor é dividido em `n` fatias iguais de `360°/n`, uma por
+  tupla, na ordem do vetor, começando no topo e seguindo no sentido horário;
+- em cada fatia, um arco azul marca a distância medida (anéis tracejados de
+  referência; escala mínima de 4 m, o alcance do HC-SR04). Distância `0` é
+  tratada como "sem eco" e deixa a fatia vazia.
+
+**Marcar como analisada** grava `analisada: true` em todas as pendentes do
+radar (`PATCH /ocorrencias/:id`), e o alerta some.
+
+Para testar:
+
+```bash
+curl -X POST localhost:8080/ocorrencias -H 'Content-Type: application/json' \
+  -d '{"radar": "radar-01", "assinatura": [[0, 300], [45, 120], [90, 310], [135, 0], [180, 290], [225, 305], [270, 80], [315, 300]]}'
+```
+
+#### Reposicionar um radar
+
+1. Clique ou toque em um radar para abrir a janela com distância e direção.
+2. Em **Reposicionar**, arraste o radar ou toque no mapa no novo local. A
+   janela mostra os valores novos e os anteriores, e uma linha tracejada liga
+   a posição antiga à nova. Arrastar fora do radar continua movendo o mapa.
+3. **Fixar posição** grava `distancia` e `direcao` com `PATCH /radares/:id`
+   (resolução de 0,1 m e 0,1°). **Cancelar** ou `Esc` descarta a mudança.
+4. Um aviso na parte inferior oferece **Desfazer reposicionamento** por 15
+   segundos (o prazo pausa com o ponteiro ou o foco sobre o aviso). Desfazer
+   grava de volta a posição anterior.
+
+Se a gravação falhar, o radar continua em edição com a mensagem de erro.
 
 ### Acessar o banco com psql
 

@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "cd valkyreye && npm start"
+    "dev": "cd valkyreye && npm start",
+    "studio": "cd api && npm run studio"
   },
   "keywords": [],
   "author": "",
