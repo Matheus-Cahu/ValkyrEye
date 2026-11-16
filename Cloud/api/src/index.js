@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "./db.js";
 import { errorHandler } from "./http.js";
+import { mqttStatus, startMqtt } from "./mqtt.js";
 import { ocorrencias } from "./routes/ocorrencias.js";
 import { radares } from "./routes/radares.js";
 import { satelite } from "./routes/satelite.js";
@@ -11,7 +12,7 @@ app.use(express.json({ limit: "256kb" }));
 
 app.get("/health", async (req, res) => {
   await pool.query("SELECT 1");
-  res.json({ status: "ok" });
+  res.json({ status: "ok", mqtt: mqttStatus() });
 });
 
 app.use("/radares", radares);
@@ -26,8 +27,15 @@ const server = app.listen(port, () => {
   console.log(`API ValkyrEye ouvindo na porta ${port}`);
 });
 
+const mqttClient = startMqtt();
+
 const shutdown = () => {
-  server.close(() => pool.end().finally(() => process.exit(0)));
+  server.close(() => {
+    const closeMqtt = mqttClient
+      ? new Promise((resolve) => mqttClient.end(false, {}, resolve))
+      : Promise.resolve();
+    closeMqtt.finally(() => pool.end().finally(() => process.exit(0)));
+  });
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

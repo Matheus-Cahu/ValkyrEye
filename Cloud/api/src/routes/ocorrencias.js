@@ -14,7 +14,7 @@ import {
 const MAX_LEITURAS = 1000;
 
 /** Assinatura: vetor de tuplas [ângulo_graus, distância_cm]. */
-function assinatura(value, name) {
+export function assinatura(value, name) {
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_LEITURAS) {
     throw badRequest(`${name} deve ser um vetor com 1 a ${MAX_LEITURAS} tuplas`);
   }
@@ -42,6 +42,17 @@ const fields = {
 };
 
 const COLUMNS = 'id, radar, "timestamp", analisada, assinatura';
+
+/** Insere uma ocorrência já validada. Usada pela rota POST e pelo MQTT. */
+export async function inserirOcorrencia(o) {
+  const { rows } = await pool.query(
+    'INSERT INTO ocorrencias (radar, "timestamp", analisada, assinatura) ' +
+      "VALUES ($1, COALESCE($2, now()), COALESCE($3, false), $4) " +
+      `RETURNING ${COLUMNS}`,
+    [o.radar, o.timestamp ?? null, o.analisada ?? null, JSON.stringify(o.assinatura)]
+  );
+  return rows[0];
+}
 
 export const ocorrencias = Router();
 
@@ -85,14 +96,8 @@ ocorrencias.get("/:id", async (req, res) => {
 });
 
 ocorrencias.post("/", async (req, res) => {
-  const o = parseBody(req.body, fields);
-  const { rows } = await pool.query(
-    'INSERT INTO ocorrencias (radar, "timestamp", analisada, assinatura) ' +
-      "VALUES ($1, COALESCE($2, now()), COALESCE($3, false), $4) " +
-      `RETURNING ${COLUMNS}`,
-    [o.radar, o.timestamp ?? null, o.analisada ?? null, JSON.stringify(o.assinatura)]
-  );
-  res.status(201).location(`/ocorrencias/${rows[0].id}`).json(rows[0]);
+  const row = await inserirOcorrencia(parseBody(req.body, fields));
+  res.status(201).location(`/ocorrencias/${row.id}`).json(row);
 });
 
 ocorrencias.patch("/:id", async (req, res) => {

@@ -1,0 +1,9 @@
+# Cada usuário só acessa o que precisa.
+
+# Radares: publicam ocorrências; o segmento do meio é o id do radar.
+user radar
+topic write valkyreye/radares/+/ocorrencias
+
+# API: lê as ocorrências para gravar no banco.
+user valkyreye-api
+topic read valkyreye/radares/+/ocorrencias
