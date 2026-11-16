@@ -9,8 +9,16 @@ O fluxo completo do sistema está em [Arquitetura](../docs/ARQUITETURA.md).
 ## Arquitetura
 
 ```text
- Raspberry Pi (Drone/coordinator.py)          Navegador
-              │ HTTP/JSON                         │
+ ESP32 dos radares
+              │ MQTT (QoS 1)
+              ▼
+ ┌──────────────────────────┐
+ │ mqtt (Mosquitto, :1883)  │
+ │ usuário/senha + ACL      │
+ └────────────┬─────────────┘
+              │ assinatura valkyreye/radares/+/ocorrencias
+ Raspberry Pi │ (Drone/coordinator.py)        Navegador
+     HTTP/JSON│                                   │
               ▼                                   ▼
  ┌──────────────────────────┐        ┌─────────────────────────┐
  │ api  (Express 5, :8080)  │        │ valkyreye (React, :3000)│  modo dev  
@@ -27,7 +35,8 @@ O fluxo completo do sistema está em [Arquitetura](../docs/ARQUITETURA.md).
 | Componente | Onde | Função |
 | --- | --- | --- |
 | `db` | [docker-compose.yml](docker-compose.yml) | PostgreSQL 17. Schema criado por [db/init.sql](db/init.sql). Porta publicada só em `127.0.0.1`. |
-| `api` | [api/](api/) | API REST em Express 5 que acessa o banco com `pg` e valida todas as entradas. |
+| `mqtt` | [mosquitto/](mosquitto/) | Broker Mosquitto 2.0. Recebe as ocorrências publicadas pelos ESP32. Exige usuário e senha; a ACL limita cada usuário ao tópico necessário. |
+| `api` | [api/](api/) | API REST em Express 5 que acessa o banco com `pg` e valida todas as entradas. Também assina o tópico MQTT e grava as ocorrências recebidas. |
 | Prisma Studio | [api/prisma/](api/prisma/) | Interface web para visualizar e editar o banco durante o desenvolvimento. Roda na máquina local, fora dos containers. |
 | `valkyreye` | [valkyreye/](valkyreye/) | Front-end React com o mapa dos radares em torno da central. |
 
@@ -39,9 +48,13 @@ confiável.
 
 ```text
 Cloud/
-├── docker-compose.yml   serviços db e api
+├── docker-compose.yml   serviços db, mqtt e api
 ├── .env.example         modelo das variáveis (copiar para .env)
 ├── db/init.sql          schema do banco (fonte da verdade)
+├── mosquitto/
+│   ├── mosquitto.conf   configuração do broker
+│   ├── acl              permissões por usuário
+│   └── entrypoint.sh    gera as senhas a partir do .env e inicia o broker
 ├── api/
 │   ├── Dockerfile
 │   ├── prisma.config.ts configuração do Prisma (lê ../.env)
@@ -50,6 +63,7 @@ Cloud/
 │       ├── index.js     servidor, /health e montagem das rotas
 │       ├── db.js        pool de conexões PostgreSQL
 │       ├── http.js      validação e tradução de erros do banco
+│       ├── mqtt.js      assinante MQTT que grava as ocorrências
 │       ├── earthengine.js  mosaico Sentinel-2 via Google Earth Engine
 │       └── routes/      radares.js, ocorrencias.js e satelite.js
 └── valkyreye/
@@ -102,7 +116,7 @@ Base: `http://localhost:8080`. Corpos em JSON. Erros respondem
 
 | Método | Rota | Descrição |
 | --- | --- | --- |
-| `GET` | `/health` | Verifica a API e a conexão com o banco |
+| `GET` | `/health` | Verifica a API e a conexão com o banco. O campo `mqtt` vale `conectado`, `desconectado` ou `desativado` |
 | `GET` | `/radares` | Lista radares |
 | `GET` | `/radares/:id` | Consulta um radar |
 | `POST` | `/radares` | Cria (`id`, `distancia`, `direcao`) |
@@ -129,6 +143,78 @@ curl -X POST localhost:8080/ocorrencias \
 curl 'localhost:8080/ocorrencias?radar=radar-01&analisada=false'
 ```
 
+## MQTT
+
+Os radares publicam cada ocorrência no broker, e a API a grava no banco com as
+mesmas validações do `POST /ocorrencias`.
+
+| Item | Valor |
+| --- | --- |
+| Endereço | `mqtt://<ip-do-servidor>:1883` (porta `MQTT_PORT`), sem TLS |
+| Usuário do ESP32 | `radar`, senha `MQTT_RADAR_PASSWORD` |
+| Tópico | `valkyreye/radares/<id-do-radar>/ocorrencias` |
+| QoS | 1 |
+| Corpo | JSON `{"assinatura": [[ângulo, distância_cm], ...]}`, com `timestamp` ISO 8601 opcional (padrão: horário da gravação) |
+
+O id do radar vem do tópico e precisa estar cadastrado em `radares`. O usuário
+`radar` só pode publicar nesse tópico; o `valkyreye-api` só pode lê-lo.
+
+A API só confirma a mensagem (PUBACK) depois de gravá-la:
+
+- **Gravada:** confirma.
+- **Conteúdo inválido** (JSON malformado, campo fora das regras, radar não
+  cadastrado): confirma e descarta, com aviso no log da API. Reenviar não
+  adiantaria.
+- **Falha temporária** (banco fora do ar): não confirma. Após 5 s a API
+  reconecta e o broker reenvia a mensagem.
+
+A API usa sessão persistente, e o broker guarda os dados no volume `mqttdata`.
+Mensagens publicadas enquanto a API está parada são entregues quando ela volta.
+Como o QoS 1 entrega "pelo menos uma vez", uma retransmissão pode gerar uma
+ocorrência duplicada.
+
+Teste sem ESP32 (com `radar-01` cadastrado):
+
+```bash
+docker compose exec mqtt mosquitto_pub -h localhost -u radar -P '<MQTT_RADAR_PASSWORD>' -q 1 \
+  -t valkyreye/radares/radar-01/ocorrencias \
+  -m '{"assinatura": [[0, 300], [45, 120], [90, 310]]}'
+docker compose logs api | grep MQTT   # "ocorrência N do radar radar-01 registrada"
+```
+
+Exemplo para ESP32 (Arduino, biblioteca PubSubClient):
+
+```cpp
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+WiFiClient wifi;
+PubSubClient mqtt(wifi);
+
+void setup() {
+  WiFi.begin("REDE", "SENHA_WIFI");
+  while (WiFi.status() != WL_CONNECTED) delay(500);
+  mqtt.setServer("192.168.0.10", 1883);   // IP da máquina com o docker compose
+  mqtt.setBufferSize(2048);               // o padrão de 256 bytes é pequeno
+}
+
+void loop() {
+  if (!mqtt.connected()) mqtt.connect("radar-01", "radar", "MQTT_RADAR_PASSWORD");
+  mqtt.loop();
+  // Ao detectar algo, monte a assinatura e publique:
+  // mqtt.publish("valkyreye/radares/radar-01/ocorrencias",
+  //              "{\"assinatura\":[[0,300],[45,120]]}");
+}
+```
+
+A PubSubClient só publica com QoS 0: se o Wi-Fi cair no meio do envio, a
+mensagem se perde. Para QoS 1 no ESP32, use o cliente MQTT do ESP-IDF
+(`esp_mqtt_client_publish(..., qos = 1, ...)`). O `clientId` precisa ser único
+por dispositivo.
+
+O broker não usa TLS: usuário, senha e dados trafegam em texto puro. Mantenha a
+porta 1883 numa rede confiável.
+
 ## Procedimentos
 
 Pré-requisitos: Docker com Compose v2 e, para o Prisma Studio, Node.js 20 ou
@@ -138,7 +224,7 @@ superior.
 
 ```bash
 cd Cloud
-cp .env.example .env     # troque POSTGRES_PASSWORD
+cp .env.example .env     # troque POSTGRES_PASSWORD e as senhas MQTT
 ```
 
 | Variável | Padrão | Uso |
@@ -148,6 +234,9 @@ cp .env.example .env     # troque POSTGRES_PASSWORD
 | `POSTGRES_PASSWORD` | obrigatória | Senha do banco, usada pelo `db`, pela `api` e pelo Prisma |
 | `POSTGRES_PORT` | `5432` | Porta do banco no host (`127.0.0.1`) |
 | `API_PORT` | `8080` | Porta da API no host |
+| `MQTT_PORT` | `1883` | Porta do broker MQTT no host, aberta na rede |
+| `MQTT_RADAR_PASSWORD` | obrigatória | Senha do usuário `radar`, usada pelos ESP32 |
+| `MQTT_API_PASSWORD` | obrigatória | Senha do usuário `valkyreye-api`, usada pela API |
 | `GEE_PROJECT` | `project_id` da chave | Projeto do Google Cloud registrado no Earth Engine |
 
 O `.env` está no `.gitignore`; não o versione.
@@ -155,15 +244,17 @@ O `.env` está no `.gitignore`; não o versione.
 ### Subir, acompanhar e parar
 
 ```bash
-docker compose up -d --build   # constrói a API e sobe db + api
+docker compose up -d --build   # constrói a API e sobe db + mqtt + api
 docker compose ps              # estado e healthcheck
 docker compose logs -f api     # logs da API
-curl localhost:8080/health     # {"status":"ok"}
+docker compose logs -f mqtt    # logs do broker (conexões, autenticação)
+curl localhost:8080/health     # {"status":"ok","mqtt":"conectado"}
 docker compose down            # para os serviços e mantém os dados
 ```
 
 A `api` só inicia depois de o `db` passar no healthcheck. Após alterar o
-código em `api/src`, rode `docker compose up -d --build api`.
+código em `api/src`, rode `docker compose up -d --build api`. Após trocar uma
+senha MQTT no `.env`, rode `docker compose up -d` para recriar `mqtt` e `api`.
 
 ### Visualizar o banco com Prisma Studio
 
@@ -339,8 +430,12 @@ para o banco local:
 docker compose stop api
 cd api
 PGHOST=localhost PGPORT=5432 PGUSER=valkyreye PGPASSWORD=<senha> \
-  PGDATABASE=valkyreye PORT=8080 npm run dev
+  PGDATABASE=valkyreye PORT=8080 \
+  MQTT_URL=mqtt://localhost:1883 MQTT_USERNAME=valkyreye-api \
+  MQTT_PASSWORD=<MQTT_API_PASSWORD> npm run dev
 ```
+
+Sem `MQTT_URL`, a API sobe sem o recebimento via MQTT.
 
 ## Integração com o Raspberry Pi
 

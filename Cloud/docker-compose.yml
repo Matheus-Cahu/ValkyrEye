@@ -18,6 +18,20 @@ services:
       timeout: 3s
       retries: 10
 
+  mqtt:
+    image: eclipse-mosquitto:2.0.22
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/mosquitto/config/entrypoint.sh"]
+    environment:
+      MQTT_RADAR_PASSWORD: ${MQTT_RADAR_PASSWORD:?Defina MQTT_RADAR_PASSWORD no arquivo .env}
+      MQTT_API_PASSWORD: ${MQTT_API_PASSWORD:?Defina MQTT_API_PASSWORD no arquivo .env}
+    volumes:
+      - ./mosquitto:/mosquitto/config:ro
+      - mqttdata:/mosquitto/data
+    ports:
+      # Exposto na rede para os ESP32 alcançarem o broker.
+      - "${MQTT_PORT:-1883}:1883"
+
   api:
     build: ./api
     restart: unless-stopped
@@ -31,6 +45,9 @@ services:
       # Imagens de satélite (opcional): chave da conta de serviço em ./secrets.
       GEE_PRIVATE_KEY_FILE: ${GEE_PRIVATE_KEY_FILE:-/run/secrets/gee/gee-service-account.json}
       GEE_PROJECT: ${GEE_PROJECT:-}
+      MQTT_URL: mqtt://mqtt:1883
+      MQTT_USERNAME: valkyreye-api
+      MQTT_PASSWORD: ${MQTT_API_PASSWORD:?Defina MQTT_API_PASSWORD no arquivo .env}
     volumes:
       - ./secrets:/run/secrets/gee:ro
     ports:
@@ -38,6 +55,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      mqtt:
+        condition: service_started
 
 volumes:
   pgdata:
+  mqttdata:
