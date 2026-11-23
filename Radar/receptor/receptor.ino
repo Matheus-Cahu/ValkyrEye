@@ -9,7 +9,8 @@
 #include <freertos/task.h>
 #include <cmath>
 
-// Mesmo hardware e parametros de Radar/ScannerLoRa.ino.
+// Receptor da central: recebe deteccoes LoRa de Radar/ScannerLoRa.ino e envia
+// cada leitura a API por Wi-Fi/HTTP. Mesmo hardware e parametros do scanner.
 const float frequenciaLoRa = 915.0f;
 SX1262 radio = new Module(8, 14, 12, 13);
 const char* RADAR_ID = "radar-01";  // Cadastre este ID na plataforma.

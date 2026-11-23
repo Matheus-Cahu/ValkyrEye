@@ -1,4 +1,4 @@
-# Receptor LoRa com envio à API
+# Receptor LoRa com envio à API (`receptor.ino`)
 
 Sketch integrado da central **Heltec WiFi LoRa 32 V3 (SX1262)**. Recebe as
 mensagens de `Radar/ScannerLoRa.ino`, imprime setor/ângulo/distância no Monitor
@@ -9,7 +9,7 @@ Serial e envia as leituras reais por HTTP à plataforma.
 1. Instale a biblioteca **RadioLib 7.4.0** no Gerenciador de Bibliotecas. Essa
    versão usa a assinatura de `radio.begin(...)` adotada pelo scanner atual.
 2. Selecione **Heltec WiFi LoRa 32 V3** e a porta da placa receptora.
-3. Abra **ReceptorLoRaAPI.ino**, nesta pasta de mesmo nome, compile e carregue.
+3. Abra **receptor.ino**, nesta pasta de mesmo nome, compile e carregue.
 4. Abra o Monitor Serial em **115200 baud**, com final de linha **Nova linha**.
 5. Escolha a rede pelo número e informe a senha quando solicitada. Use uma
    rede aberta ou com senha pessoal; redes empresariais exigem outra configuração.
