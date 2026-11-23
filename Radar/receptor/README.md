@@ -61,6 +61,9 @@ servidor no momento da gravação, não no momento de recepção pelo rádio.
 
 - Uma tarefa FreeRTOS recebe LoRa enquanto o loop principal trata Wi-Fi,
   configuração serial e HTTP. Não há requisições de rede dentro de interrupções.
+- A recepção LoRa só começa depois da primeira conexão Wi-Fi e da configuração
+  do servidor; mensagens enviadas antes disso são perdidas. Se o Wi-Fi cair
+  depois, a recepção continua e as leituras aguardam na fila.
 - A fila armazena até **32 detecções em RAM**. Quando cheia, descarta leituras
   novas e registra `FILA CHEIA` na serial. Reiniciar a placa perde a fila.
 - Envia uma detecção por ciclo, com intervalo de **10 segundos após a tentativa**.

@@ -257,19 +257,29 @@ void setup() {
     Serial.printf("Erro ao iniciar LoRa: %d\n", status);
     while (true) delay(1000);
   }
-  if (xTaskCreate(receiveLoRaTask, "LoRaRX", 8192, nullptr, 1, nullptr) != pdPASS) {
-    Serial.println("Falha ao criar tarefa LoRa.");
-    while (true) delay(1000);
-  }
-
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(false);
   WiFi.setMinSecurity(WIFI_AUTH_OPEN);
 }
 
+// A recepcao LoRa so comeca depois da primeira conexao Wi-Fi e da configuracao
+// do servidor. Depois disso a tarefa segue ativa, mesmo se o Wi-Fi cair.
+bool loraStarted = false;
+
+void startLoRaReception() {
+  if (loraStarted) return;
+  if (xTaskCreate(receiveLoRaTask, "LoRaRX", 8192, nullptr, 1, nullptr) != pdPASS) {
+    Serial.println("Falha ao criar tarefa LoRa.");
+    while (true) delay(1000);
+  }
+  loraStarted = true;
+  Serial.println("Recepcao LoRa iniciada. Aguardando deteccoes...");
+}
+
 void loop() {
   if (!connectToSelectedNetwork()) return;
   requestServerAddress();
+  startLoRaReception();
   unsigned long lastSend = millis() - SEND_INTERVAL_MS;
   Serial.println("Digite R e Enviar para reconfigurar Wi-Fi e servidor.");
   while (WiFi.status() == WL_CONNECTED) {
