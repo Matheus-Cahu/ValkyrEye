@@ -1,0 +1,7 @@
+(version 1)
+(rule "Trilhas de 1 mm"
+  (condition "A.Type == 'Track'")
+  (constraint track_width (min 1mm) (max 1mm)))
+(rule "Cobre somente na face inferior"
+  (layer F.Cu)
+  (constraint disallow track via zone))

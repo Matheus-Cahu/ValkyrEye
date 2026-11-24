@@ -1,0 +1,1 @@
+(fp_lib_table (version 7) (lib (name "ValkyrEye") (type "KiCad") (uri "${KIPRJMOD}/ValkyrEye.pretty") (options "") (descr "PCI ValkyrEye")))
