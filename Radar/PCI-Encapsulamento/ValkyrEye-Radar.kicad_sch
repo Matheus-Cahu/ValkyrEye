@@ -1753,7 +1753,7 @@
 			(embedded_fonts no)
 		)
 	)
-	(text "Alimente a Heltec pelo USB-C e ligue a fonte regulada de 5 V em J4."
+	(text "Use J4 (5 V) ou USB-C para alimentar; não use ambos juntos."
 		(exclude_from_sim no)
 		(at 29.21 146.05 0)
 		(effects
@@ -1898,10 +1898,6 @@
 	(no_connect
 		(at 100.33 85.09)
 		(uuid "6a85c584-87d8-5b58-9a67-cabdff3dbf68")
-	)
-	(no_connect
-		(at 49.53 69.85)
-		(uuid "6f151442-7a74-5b47-8245-be24186fad9b")
 	)
 	(no_connect
 		(at 49.53 92.71)
@@ -2066,6 +2062,15 @@
 		(uuid "8bb76c42-dc67-5896-9bd8-0c07e5c9441b")
 	)
 	(wire
+		(pts
+			(xy 29.21 69.85) (xy 49.53 69.85)
+		)
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "c6ffb783-31e6-4bb9-8d9b-b4f956640a5f")
+	)	(wire
 		(pts
 			(xy 29.21 67.31) (xy 49.53 67.31)
 		)
@@ -2315,7 +2320,16 @@
 		)
 		(uuid "86ce4b72-b9e4-5bd9-bfef-aeae1ea6f369")
 	)
-	(label "GND"
+	(label "+5V"
+		(at 29.21 69.85 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "15c35bd8-8aec-4d7d-81da-900bb2d8307b")
+	)	(label "GND"
 		(at 29.21 67.31 0)
 		(effects
 			(font
